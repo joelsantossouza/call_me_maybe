@@ -1,4 +1,5 @@
-from argparse import ArgumentParser
+import json
+from argparse import ArgumentParser, Namespace
 from .callme_files_loader import CallMeFilesLoader
 
 if __name__ == "__main__":
@@ -29,8 +30,16 @@ if __name__ == "__main__":
         default="data/output/function_calls.json",
         help="Custom output results JSON file"
     )
-    args = parser.parse_args()
-    print(args)
+    args: Namespace = parser.parse_args()
 
-    # Load files data into objets memory
+    # Load JSON files data into objects memory
     loader: CallMeFilesLoader = CallMeFilesLoader()
+    try:
+        with open(args.functions_definition, "r") as functions_definition_file:
+            data: any = json.load(functions_definition_file)
+            loader.load_functions(data)
+        with open(args.input, "r") as input_file:
+            data: any = json.load(input_file)
+            loader.load_prompts(data)
+    except Exception as error_msg:
+        print(f"Error: {error_msg}")

@@ -22,4 +22,4 @@ class CallMePrompt(BaseModel):
     """
     Prompt structure validation
     """
-    data: str
+    prompt: str
