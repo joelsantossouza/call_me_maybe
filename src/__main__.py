@@ -1,6 +1,7 @@
 import json
 from argparse import ArgumentParser, Namespace
 from .callme_files_loader import CallMeFilesLoader
+from .decoder import Decoder
 
 if __name__ == "__main__":
     # Process CLI arguments
@@ -43,3 +44,11 @@ if __name__ == "__main__":
             loader.load_prompts(data)
     except Exception as error_msg:
         print(f"Error: {error_msg}")
+
+    # Choose best function name
+    decoder: Decoder = Decoder()
+
+    for prompt in loader.prompts:
+        func_name: str = decoder.decode_func_name(
+            prompt.prompt, loader.func_names
+        )
