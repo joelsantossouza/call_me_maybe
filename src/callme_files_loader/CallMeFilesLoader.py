@@ -9,14 +9,14 @@ class CallMeFilesLoader:
 
     def __init__(self) -> None:
         self.func_definitions: dict[str, CallMeFunction] = {}
-        self.func_names: list[str] = []
+        self.func_names: set[str] = set()
         self.prompts: list[str] = []
 
     def load_functions(self, file: list[dict]) -> None:
         for function in file:
             validated_function: CallMeFunction = CallMeFunction(**function)
             self.func_definitions[validated_function.name] = validated_function
-            self.func_names.append(validated_function.name)
+            self.func_names.add(validated_function.name)
 
     def load_prompts(self, file: list[dict]) -> None:
         for prompt in file:

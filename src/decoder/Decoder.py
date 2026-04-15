@@ -1,6 +1,7 @@
 from llm_sdk import Small_LLM_Model
-from src.helpers import llm_vocab_load, vocab_filter_funcsname_prefix
+from src.helpers import llm_vocab_load, vocab_filter_funcsname_prefix, get_instruction_funcname
 from src.structures import Token
+from src.callme_files_loader import CallMeFunction
 
 
 class Decoder:
@@ -12,25 +13,25 @@ class Decoder:
         self.llm: Small_LLM_Model = Small_LLM_Model()
         self.vocab: dict[str, int] = llm_vocab_load(self.llm)
 
-    def decode_func_name(self, prompt: str,
-                         func_options: set[str]) -> str | None:
-        llm = self.llm
-        input_ids: list[int] = llm.encode(prompt).tolist()[0]
-        func_name: str = "fn_"
+    def decode_func_name(self, prompt: str, func_names: set[str],
+                         func_defs: dict[str, CallMeFunction]) -> str | None:
+        llm: Small_LLM_Model = self.llm
+        decoded_func: str = "fn_"
+        instruction: str = get_instruction_funcname(prompt, func_defs)
+        func_names.add("fn_none")
 
         print(f"\n\n{prompt}")
         while True:
-            logits: list[float] = llm.get_logits_from_input_ids(input_ids)
+            ids: list[int] = llm.encode(instruction + decoded_func).tolist()[0]
+            logits: list[float] = llm.get_logits_from_input_ids(ids)
             valid_tokens: list[Token] = vocab_filter_funcsname_prefix(
-                self.vocab, func_options, func_name
+                self.vocab, func_names, decoded_func
             )
             if not valid_tokens:
                 return None
             best_token: Token = max(
                 valid_tokens, key=lambda token: logits[token.id]
             )
-            func_name += best_token.str
-            print(f"{func_name}: {valid_tokens}")
-            if func_name in func_options:
-                return func_name
-            input_ids.append(best_token.id)
+            decoded_func += best_token.str
+            if decoded_func in func_names:
+                return decoded_func

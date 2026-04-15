@@ -50,5 +50,6 @@ if __name__ == "__main__":
 
     for prompt in loader.prompts:
         func_name: str = decoder.decode_func_name(
-            prompt.prompt, loader.func_names
+            prompt.prompt, loader.func_names, loader.func_definitions
         )
+        print(func_name)
