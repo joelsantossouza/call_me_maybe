@@ -52,4 +52,8 @@ if __name__ == "__main__":
         func_name: str = decoder.decode_func_name(
             prompt.prompt, loader.func_names, loader.func_definitions
         )
-        print(func_name)
+
+        # Fill the function parameters value
+        decoder.decode_func_params(
+            prompt.prompt, loader.func_definitions[func_name]
+        )

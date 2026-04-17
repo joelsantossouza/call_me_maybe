@@ -1,4 +1,5 @@
 import json
+import re
 from llm_sdk import Small_LLM_Model
 from src.structures import Token
 from src.callme_files_loader import CallMeFunction
@@ -10,36 +11,6 @@ def llm_vocab_load(llm: Small_LLM_Model) -> dict[str, int]:
 
     with open(vocab_path, "r") as vocab:
         return json.load(vocab)
-
-#def llm_vocab_load(llm: Small_LLM_Model) -> dict[str, int]:
-#    """Get the LLM vocab json path and convert into a dictionary"""
-#    vocab_path: str = llm.get_path_to_vocab_file()
-#    filtered_vocab: dict[str, int] = {}
-#
-#    with open(vocab_path, "r") as vocab:
-#        data: any = json.load(vocab)
-#        for token_str, token_id in data.items():
-#            if token_str.startswith("Ġ"):
-#                token_str = token_str[:1]
-#            filtered_vocab[token_str] = token_id
-#        return filtered_vocab
-#
-
-
-#def token_list_insert_sorted(tokens: list[Token],
-#                             insert_token: Token) -> None:
-#    """
-#    Insert new token in tokens, sorting by descending order
-#    based on Token.str length
-#    """
-#    i: int = 0
-#    insert_token_len: int = len(insert_token.str)
-#
-#    for token in tokens:
-#        if len(token.str) < insert_token_len:
-#            break
-#        i += 1
-#    tokens.insert(i, insert_token)
 
 
 def vocab_filter_funcsname_prefix(vocab: dict[str, int], funcsname: set[str],
@@ -59,11 +30,19 @@ def vocab_filter_funcsname_prefix(vocab: dict[str, int], funcsname: set[str],
     return tokens_filtered
 
 
+def extract_numbers(text: str) -> list[str]:
+    """
+    Return a list of string containing all numbers present
+    on text
+    """
+    return re.findall(r"-?\d+\.?\d*", text)
+
+
 def get_instruction_funcname(
-        prompt: str, func_defs: dict[str, CallMeFunction]) -> str | None:
+        prompt: str, func_defs: dict[str, CallMeFunction]) -> str:
     """
     Returns the Builded prompt to guide the LLM to
-    choose the best tokens
+    choose the best tokens of a function name
     """
 
     avail_funcs: list[str] = [
@@ -93,6 +72,45 @@ def get_instruction_funcname(
         "explicitly mentions 'interest', 'rate', "
         "'principal', or 'compound'.\n"
         f"Available Functions:\n{avail_funcs}\n"
+        "<|im_end|>\n"
+        f"<|im_start|>user\n{prompt}\n<|im_end|>\n"
+        "<|im_start|>assistant\n"
+    )
+
+
+def get_instruction_funcparam_number(prompt: str,
+                                     func_def: CallMeFunction,
+                                     param: str,
+                                     nbr_options: list[str]) -> str:
+    """
+    Returns the Builded prompt to guide the LLM to
+    choose the best tokens of a function parameter of type number
+    """
+    all_params: dict[str, str] = {}
+    for param_name, param_value in func_def.parameters.items():
+        all_params[param_name] = param_value.type
+
+    return (
+        "<|im_start|>system\n"
+        "You are a strict parameter selector.\n"
+        "Your job is to select the MOST appropriate numeric value for a "
+        "function parameter.\n\n"
+        "RULES:\n"
+        "1. You MUST select EXACTLY ONE value from the provided options.\n"
+        "2. You MUST NOT generate new numbers.\n"
+        "3. You MUST NOT modify any number.\n"
+        "4. You MUST choose the number that best matches the user intent.\n"
+        "5. If multiple numbers exist, prefer those directly involved in "
+        "the operation.\n"
+        "6. Ignore unrelated numbers (e.g., counts, indices, or "
+        "descriptions).\n"
+        "7. Your output MUST be only the selected number.\n"
+        "\n"
+        f"Function: {func_def.name}\n"
+        f"Description: {func_def.description}\n"
+        f"All Parameters: {all_params}\n"
+        f"Parameter to fill: {param}\n"
+        f"Available options: {nbr_options}\n"
         "<|im_end|>\n"
         f"<|im_start|>user\n{prompt}\n<|im_end|>\n"
         "<|im_start|>assistant\n"
