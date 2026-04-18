@@ -5,6 +5,7 @@ from src.helpers import (
     llm_vocab_load,
     vocab_filter_funcsname_prefix,
     extract_numbers,
+    extract_strings,
     get_instruction_funcname,
     get_instruction_funcparam_number
 )
@@ -19,32 +20,50 @@ class Decoder:
         self.llm: Small_LLM_Model = Small_LLM_Model()
         self.vocab: dict[str, int] = llm_vocab_load(self.llm)
 
-    def decode_func_param_number(self, prompt: str,
-                                 func_def: CallMeFunction,
-                                 param: str,
-                                 nbr_options: list[str]) -> str:
+    @staticmethod
+    def get_instruction_funcparam(prompt: str,
+                                  func_def: CallMeFunction,
+                                  param: str) -> tuple:
+        func_param_type: str = func_def.parameters[param].type
+        if func_param_type == "number":
+            opts: list[str] = extract_numbers(prompt)
+            return (
+                get_instruction_funcparam_number(
+                    prompt, func_def, param, opts),
+                opts
+            )
+        if func_param_type == "string":
+            ...
+
+    def decode_options(self, options: list[str],
+                       instruction: str) -> str:
         llm: Small_LLM_Model = self.llm
 
-        def score(nbr: str) -> float:
-            instruction: str = get_instruction_funcparam_number(
-                prompt, func_def, param, nbr_options
-            )
-            ids: list[int] = llm.encode(instruction + nbr).tolist()[0]
+        def score(option: str) -> float:
+            ids: list[int] = llm.encode(instruction + option).tolist()[0]
             logits: list[float] = llm.get_logits_from_input_ids(ids)
             return max(logits)
 
-        return max(nbr_options, key=score)
+        return max(options, key=score)
 
     def decode_func_params(self, prompt: str,
                            func_def: CallMeFunction) -> dict[str, str]:
-        nbr_options: list[str] = extract_numbers(prompt)
+        already_got: set[str] = set()
+        result: dict[str, str] = {}
+
         print(func_def.name, ":")
         for param in func_def.parameters.keys():
-            nbr: str = self.decode_func_param_number(
-                prompt, func_def, param, nbr_options
+            instruction, options = self.get_instruction_funcparam(
+                prompt, func_def, param
             )
-            nbr_options.remove(nbr)
-            print(f"{param} = {nbr}")
+            options = [opt for opt in options if opt not in already_got]
+            option: str = self.decode_options(
+                options, instruction
+            )
+            already_got.add(option)
+            result[param] = option
+            print(f"{param} = {option}")
+        return result
 
     def decode_func_name(self, prompt: str, func_names: set[str],
                          func_defs: dict[str, CallMeFunction]) -> str:

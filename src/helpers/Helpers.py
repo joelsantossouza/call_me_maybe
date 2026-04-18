@@ -38,6 +38,13 @@ def extract_numbers(text: str) -> list[str]:
     return re.findall(r"-?\d+\.?\d*", text)
 
 
+def extract_strings(text: str) -> list[str]:
+    """
+    Return all substrings inside single or double quotes
+    """
+    return re.findall(r"'([^']*)'|\"([^\"]*)\"", text)
+
+
 def get_instruction_funcname(
         prompt: str, func_defs: dict[str, CallMeFunction]) -> str:
     """

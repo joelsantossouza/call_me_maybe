@@ -3,6 +3,7 @@ from .Helpers import (
     llm_vocab_load,
     vocab_filter_funcsname_prefix,
     extract_numbers,
+    extract_strings,
     get_instruction_funcname,
     get_instruction_funcparam_number,
 )
