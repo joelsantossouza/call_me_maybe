@@ -6,8 +6,11 @@ from src.helpers import (
     vocab_filter_funcsname_prefix,
     extract_numbers,
     extract_strings,
+    extract_names,
     get_instruction_funcname,
-    get_instruction_funcparam_number
+    get_instruction_funcparam_number,
+    get_instruction_funcparam_string,
+    get_instruction_funcparam_name
 )
 
 
@@ -25,15 +28,28 @@ class Decoder:
                                   func_def: CallMeFunction,
                                   param: str) -> tuple:
         func_param_type: str = func_def.parameters[param].type
-        if func_param_type == "number":
-            opts: list[str] = extract_numbers(prompt)
-            return (
-                get_instruction_funcparam_number(
-                    prompt, func_def, param, opts),
-                opts
-            )
         if func_param_type == "string":
-            ...
+            if param == "name":
+                opts: list[str] = extract_names(prompt)
+                return (
+                    get_instruction_funcparam_name(
+                        prompt, func_def, param, opts
+                    ), opts
+                )
+            if param == "s" or "string" in param:
+                opts: list[str] = extract_strings(prompt)
+                return (
+                    get_instruction_funcparam_string(
+                        prompt, func_def, param, opts
+                    ), opts
+                )
+        opts: list[str] = extract_numbers(prompt)
+        return (
+            get_instruction_funcparam_number(
+                prompt, func_def, param, opts
+            ),
+            opts
+        )
 
     def decode_options(self, options: list[str],
                        instruction: str) -> str:

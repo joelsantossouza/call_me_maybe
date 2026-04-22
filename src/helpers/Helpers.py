@@ -37,12 +37,23 @@ def extract_numbers(text: str) -> list[str]:
     """
     return re.findall(r"-?\d+\.?\d*", text)
 
+def extract_names(text: str) -> list[str]:
+    """
+    Return all words closest to names in text
+    """
+    words: list[str] = re.findall(r"\b[a-zA-Z]+\b", text)
+    stopwords: list[str] = [
+        "the", "and", "what", "is", "to", "of",
+        "greet", "times", "never", "forget", "too"
+    ]
+    return [word for word in words if word.lower() not in stopwords]
+
 
 def extract_strings(text: str) -> list[str]:
     """
     Return all substrings inside single or double quotes
     """
-    return re.findall(r"'([^']*)'|\"([^\"]*)\"", text)
+    return re.findall(r"['\"](.*?)['\"]", text)
 
 
 def get_instruction_funcname(
@@ -118,6 +129,97 @@ def get_instruction_funcparam_number(prompt: str,
         f"All Parameters: {all_params}\n"
         f"Parameter to fill: {param}\n"
         f"Available options: {nbr_options}\n"
+        "<|im_end|>\n"
+        f"<|im_start|>user\n{prompt}\n<|im_end|>\n"
+        "<|im_start|>assistant\n"
+    )
+
+def get_instruction_funcparam_string(prompt: str,
+                                     func_def: CallMeFunction,
+                                     param: str,
+                                     string_options: list[str]) -> str:
+    """
+    Returns the Builded prompt to guide the LLM to
+    choose the best tokens of a function parameter of type string
+    """
+    all_params: dict[str, str] = {}
+    for param_name, param_value in func_def.parameters.items():
+        all_params[param_name] = param_value.type
+
+    return (
+        "<|im_start|>system\n"
+        "You are a strict parameter selector for STRING values.\n"
+        "\n"
+        "CRITICAL RULES:\n"
+        "1. You MUST select EXACTLY ONE string from the provided options.\n"
+        "2. You MUST NOT create or modify strings.\n"
+        "\n"
+        "PRIORITY ORDER:\n"
+        "1. ALWAYS prefer strings that appear inside quotes ('...' or \"...\").\n"
+        "2. If multiple quoted strings exist, choose the one that best matches the parameter role.\n"
+        "3. If no quoted strings exist, choose the most relevant word or phrase from the prompt.\n"
+        "\n"
+        "CONTEXT RULES:\n"
+        "4. If the function is about string manipulation (reverse, replace, substitute),\n"
+        "   the target string is usually inside quotes.\n"
+        "5. Ignore unrelated words outside quotes unless no quoted strings exist.\n"
+        "\n"
+        "OUTPUT RULE:\n"
+        "6. Output ONLY the selected string.\n"
+        "\n"
+        f"Function: {func_def.name}\n"
+        f"Description: {func_def.description}\n"
+        f"Parameters: {all_params}\n"
+        f"Parameter to fill: {param}\n"
+        f"Available options: {string_options}\n"
+        "<|im_end|>\n"
+        f"<|im_start|>user\n{prompt}\n<|im_end|>\n"
+        "<|im_start|>assistant\n"
+    )
+
+def get_instruction_funcparam_name(prompt: str,
+                                     func_def: CallMeFunction,
+                                     param: str,
+                                     string_options: list[str]) -> str:
+    """
+    Returns the Builded prompt to guide the LLM to
+    choose the best tokens of a function parameter of type string
+    and is more probable to be a name
+    """
+    all_params: dict[str, str] = {}
+    for param_name, param_value in func_def.parameters.items():
+        all_params[param_name] = param_value.type
+
+    return (
+        "<|im_start|>system\n"
+        "You are a strict parameter selector for PERSON NAMES.\n"
+        "\n"
+        "CRITICAL RULES:\n"
+        "1. You MUST select EXACTLY ONE value from the available options.\n"
+        "2. You MUST NOT create or modify names.\n"
+        "\n"
+        "NAME SELECTION RULES:\n"
+        "3. A valid name is a word that refers to a person (e.g., 'John', 'Alice', 'Shrek').\n"
+        "4. Prefer words that are targets of actions (e.g., 'greet John' → 'John').\n"
+        "5. Prefer words that appear after verbs like 'greet', 'call', 'message', 'send'.\n"
+        "6. Ignore generic words like 'string', 'word', 'number', 'times', etc.\n"
+        "7. If multiple names exist, follow the order they appear in the prompt.\n"
+        "\n"
+        "CONTEXT RULES:\n"
+        "8. If the prompt says 'greet X and Y', then:\n"
+        "   - first parameter → X\n"
+        "   - second parameter → Y\n"
+        "\n"
+        "9. Names may be lowercase or uppercase.\n"
+        "\n"
+        "OUTPUT RULE:\n"
+        "10. Output ONLY the selected name.\n"
+        "\n"
+        f"Function: {func_def.name}\n"
+        f"Description: {func_def.description}\n"
+        f"Parameters: {all_params}\n"
+        f"Parameter to fill: {param}\n"
+        f"Available options: {string_options}\n"
         "<|im_end|>\n"
         f"<|im_start|>user\n{prompt}\n<|im_end|>\n"
         "<|im_start|>assistant\n"
