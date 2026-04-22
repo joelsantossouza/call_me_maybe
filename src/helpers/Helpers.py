@@ -44,7 +44,8 @@ def extract_names(text: str) -> list[str]:
     words: list[str] = re.findall(r"\b[a-zA-Z]+\b", text)
     stopwords: list[str] = [
         "the", "and", "what", "is", "to", "of",
-        "greet", "times", "never", "forget", "too"
+        "greet", "times", "never", "forget", "too",
+        "a"
     ]
     return [word for word in words if word.lower() not in stopwords]
 
@@ -54,6 +55,15 @@ def extract_strings(text: str) -> list[str]:
     Return all substrings inside single or double quotes
     """
     return re.findall(r"['\"](.*?)['\"]", text)
+
+
+def extract_nouns(text: str) -> list[str]:
+    """
+    Return all words closest to nouns in text
+    """
+    strings: list[str] = extract_strings(text)
+    text_without_quotes: str = re.sub(r"['\"].*?['\"]", "", text)
+    return extract_names(text_without_quotes) + strings
 
 
 def get_instruction_funcname(
@@ -214,6 +224,52 @@ def get_instruction_funcparam_name(prompt: str,
         "\n"
         "OUTPUT RULE:\n"
         "10. Output ONLY the selected name.\n"
+        "\n"
+        f"Function: {func_def.name}\n"
+        f"Description: {func_def.description}\n"
+        f"Parameters: {all_params}\n"
+        f"Parameter to fill: {param}\n"
+        f"Available options: {string_options}\n"
+        "<|im_end|>\n"
+        f"<|im_start|>user\n{prompt}\n<|im_end|>\n"
+        "<|im_start|>assistant\n"
+    )
+
+def get_instruction_funcparam_nouns(prompt: str,
+                                     func_def: CallMeFunction,
+                                     param: str,
+                                     string_options: list[str]) -> str:
+    """
+    Returns the Builded prompt to guide the LLM to
+    choose the best tokens of a function parameter of type string
+    and is more probable to be a noun
+    """
+    all_params: dict[str, str] = {}
+    for param_name, param_value in func_def.parameters.items():
+        all_params[param_name] = param_value.type
+
+    return (
+        "<|im_start|>system\n"
+        "You are a strict parameter selector for NOUN values.\n"
+        "\n"
+        "CRITICAL RULES:\n"
+        "1. You MUST select EXACTLY ONE value from the available options.\n"
+        "2. You MUST NOT create or modify words.\n"
+        "\n"
+        "NOUN SELECTION RULES:\n"
+        "3. A noun is an object, entity, or thing referenced in the prompt.\n"
+        "4. Prefer nouns that are DIRECTLY involved in the operation.\n"
+        "5. If the prompt is about string manipulation (replace, reverse, substitute),\n"
+        "   the noun is usually the TARGET word or phrase being manipulated.\n"
+        "6. Ignore verbs (e.g., 'replace', 'reverse', 'calculate').\n"
+        "7. Ignore generic words like 'string', 'word', 'numbers', 'thing'.\n"
+        "\n"
+        "CONTEXT RULES:\n"
+        "10. If multiple nouns exist, select the one most relevant to the parameter role.\n"
+        "11. If the parameter represents a target or input, choose the noun being acted upon.\n"
+        "\n"
+        "OUTPUT RULE:\n"
+        "12. Output ONLY the selected value.\n"
         "\n"
         f"Function: {func_def.name}\n"
         f"Description: {func_def.description}\n"

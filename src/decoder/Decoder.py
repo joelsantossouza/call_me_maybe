@@ -7,10 +7,12 @@ from src.helpers import (
     extract_numbers,
     extract_strings,
     extract_names,
+    extract_nouns,
     get_instruction_funcname,
     get_instruction_funcparam_number,
     get_instruction_funcparam_string,
-    get_instruction_funcparam_name
+    get_instruction_funcparam_name,
+    get_instruction_funcparam_nouns,
 )
 
 
@@ -43,6 +45,12 @@ class Decoder:
                         prompt, func_def, param, opts
                     ), opts
                 )
+            opts: list[str] = extract_nouns(prompt)
+            return (
+                get_instruction_funcparam_nouns(
+                    prompt, func_def, param, opts
+                ), opts
+            )
         opts: list[str] = extract_numbers(prompt)
         return (
             get_instruction_funcparam_number(
