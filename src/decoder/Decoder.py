@@ -86,13 +86,14 @@ class Decoder:
         already_got: set[str] = set()
         result: dict[str, str] = {}
 
+        print(prompt)
         print(func_def.name, ":")
-        for param in func_def.parameters.keys():
+        for param in reversed(list(func_def.parameters.keys())):
             instruction, options = self.get_instruction_funcparam(
                 prompt, func_def, param
             )
             options = [opt for opt in options if opt not in already_got]
-            print(options)
+            print("options:", options)
             option: str = self.decode_options(
                 options, instruction
             )
