@@ -48,10 +48,11 @@ if __name__ == "__main__":
     # Choose best function name
     decoder: Decoder = Decoder()
 
-    for prompt in loader.prompts:
-        func_name: str = decoder.decode_func_name(
-            prompt.prompt, loader.func_names, loader.func_definitions
-        )
+    for prompt in loader.prompts[8:]:
+        # func_name: str = decoder.decode_func_name(
+        #    prompt.prompt, loader.func_names, loader.func_definitions
+        # )
+        func_name: str = "fn_substitute_string_with_regex"
 
         # Fill the function parameters value
         decoder.decode_func_params(

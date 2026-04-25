@@ -12,7 +12,8 @@ from src.helpers import (
     get_instruction_funcparam_number,
     get_instruction_funcparam_string,
     get_instruction_funcparam_name,
-    get_instruction_funcparam_nouns,
+    get_instruction_funcparam_replacement,
+    get_instruction_funcparam_regex,
 )
 
 
@@ -38,16 +39,23 @@ class Decoder:
                         prompt, func_def, param, opts
                     ), opts
                 )
-            if param == "s" or "string" in param:
-                opts: list[str] = extract_strings(prompt)
+            if "regex" in param:
+                opts: list[str] = extract_nouns(prompt)
                 return (
-                    get_instruction_funcparam_string(
+                    get_instruction_funcparam_regex(
                         prompt, func_def, param, opts
                     ), opts
                 )
-            opts: list[str] = extract_nouns(prompt)
+            if "replace" in param:
+                opts: list[str] = extract_nouns(prompt)
+                return (
+                    get_instruction_funcparam_replacement(
+                        prompt, func_def, param, opts
+                    ), opts
+                )
+            opts: list[str] = extract_strings(prompt)
             return (
-                get_instruction_funcparam_nouns(
+                get_instruction_funcparam_string(
                     prompt, func_def, param, opts
                 ), opts
             )
@@ -62,6 +70,9 @@ class Decoder:
     def decode_options(self, options: list[str],
                        instruction: str) -> str:
         llm: Small_LLM_Model = self.llm
+
+        if len(options) == 1:
+            return options[0]
 
         def score(option: str) -> float:
             ids: list[int] = llm.encode(instruction + option).tolist()[0]
@@ -81,6 +92,7 @@ class Decoder:
                 prompt, func_def, param
             )
             options = [opt for opt in options if opt not in already_got]
+            print(options)
             option: str = self.decode_options(
                 options, instruction
             )

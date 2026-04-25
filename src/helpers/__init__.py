@@ -10,5 +10,6 @@ from .Helpers import (
     get_instruction_funcparam_number,
     get_instruction_funcparam_string,
     get_instruction_funcparam_name,
-    get_instruction_funcparam_nouns,
+    get_instruction_funcparam_regex,
+    get_instruction_funcparam_replacement,
 )

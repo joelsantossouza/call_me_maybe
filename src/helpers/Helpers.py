@@ -37,6 +37,7 @@ def extract_numbers(text: str) -> list[str]:
     """
     return re.findall(r"-?\d+\.?\d*", text)
 
+
 def extract_names(text: str) -> list[str]:
     """
     Return all words closest to names in text
@@ -44,7 +45,7 @@ def extract_names(text: str) -> list[str]:
     words: list[str] = re.findall(r"\b[a-zA-Z]+\b", text)
     stopwords: list[str] = [
         "the", "and", "what", "is", "to", "of",
-        "greet", "times", "never", "forget", "too",
+        "in", "on", "times", "never", "forget", "too",
         "a"
     ]
     return [word for word in words if word.lower() not in stopwords]
@@ -54,7 +55,8 @@ def extract_strings(text: str) -> list[str]:
     """
     Return all substrings inside single or double quotes
     """
-    return re.findall(r"['\"](.*?)['\"]", text)
+    matches = re.findall(r'"([^"]*)"|\'([^\']*)\'', text)
+    return [m[0] or m[1] for m in matches]
 
 
 def extract_nouns(text: str) -> list[str]:
@@ -62,7 +64,7 @@ def extract_nouns(text: str) -> list[str]:
     Return all words closest to nouns in text
     """
     strings: list[str] = extract_strings(text)
-    text_without_quotes: str = re.sub(r"['\"].*?['\"]", "", text)
+    text_without_quotes: str = re.sub(r'"([^"]*)"|\'([^\']*)\'',  "", text)
     return extract_names(text_without_quotes) + strings
 
 
@@ -144,6 +146,7 @@ def get_instruction_funcparam_number(prompt: str,
         "<|im_start|>assistant\n"
     )
 
+
 def get_instruction_funcparam_string(prompt: str,
                                      func_def: CallMeFunction,
                                      param: str,
@@ -187,10 +190,11 @@ def get_instruction_funcparam_string(prompt: str,
         "<|im_start|>assistant\n"
     )
 
+
 def get_instruction_funcparam_name(prompt: str,
-                                     func_def: CallMeFunction,
-                                     param: str,
-                                     string_options: list[str]) -> str:
+                                   func_def: CallMeFunction,
+                                   param: str,
+                                   string_options: list[str]) -> str:
     """
     Returns the Builded prompt to guide the LLM to
     choose the best tokens of a function parameter of type string
@@ -235,14 +239,15 @@ def get_instruction_funcparam_name(prompt: str,
         "<|im_start|>assistant\n"
     )
 
-def get_instruction_funcparam_nouns(prompt: str,
-                                     func_def: CallMeFunction,
-                                     param: str,
-                                     string_options: list[str]) -> str:
+
+def get_instruction_funcparam_regex(prompt: str,
+                                    func_def: CallMeFunction,
+                                    param: str,
+                                    string_options: list[str]) -> str:
     """
     Returns the Builded prompt to guide the LLM to
     choose the best tokens of a function parameter of type string
-    and is more probable to be a noun
+    and is more probable to be a regex
     """
     all_params: dict[str, str] = {}
     for param_name, param_value in func_def.parameters.items():
@@ -250,32 +255,94 @@ def get_instruction_funcparam_nouns(prompt: str,
 
     return (
         "<|im_start|>system\n"
-        "You are a strict parameter selector for NOUN values.\n"
+        "You select EXACTLY ONE option representing a REGEX/PATTERN.\n"
         "\n"
-        "CRITICAL RULES:\n"
-        "1. You MUST select EXACTLY ONE value from the available options.\n"
-        "2. You MUST NOT create or modify words.\n"
+        "HARD RULES:\n"
+        "- Output ONE option only.\n"
+        "- Must be chosen ONLY from the available options.\n"
+        "- Do NOT modify or infer new words.\n"
         "\n"
-        "NOUN SELECTION RULES:\n"
-        "3. A noun is an object, entity, or thing referenced in the prompt.\n"
-        "4. Prefer nouns that are DIRECTLY involved in the operation.\n"
-        "5. If the prompt is about string manipulation (replace, reverse, substitute),\n"
-        "   the noun is usually the TARGET word or phrase being manipulated.\n"
-        "6. Ignore verbs (e.g., 'replace', 'reverse', 'calculate').\n"
-        "7. Ignore generic words like 'string', 'word', 'numbers', 'thing'.\n"
+        "CRITICAL ROLE SEPARATION:\n"
+        "- The text BEFORE 'with' is PATTERN SPACE.\n"
+        "- The text AFTER 'with' is REPLACEMENT SPACE.\n"
+        "- PATTERN SPACE and REPLACEMENT SPACE are COMPLETELY INDEPENDENT.\n"
+        "- NEVER use information from REPLACEMENT SPACE to choose PATTERN.\n"
+        "- NEVER use information from PATTERN SPACE to choose REPLACEMENT.\n"
         "\n"
-        "CONTEXT RULES:\n"
-        "10. If multiple nouns exist, select the one most relevant to the parameter role.\n"
-        "11. If the parameter represents a target or input, choose the noun being acted upon.\n"
+        "PATTERN RULES:\n"
+        "- Select ONLY what is being matched or found.\n"
+        "- Focus on entities like: numbers, letters, words, digits, spaces, punctuation.\n"
+        "- Prefer the object being targeted in the sentence BEFORE 'with'.\n"
         "\n"
-        "OUTPUT RULE:\n"
-        "12. Output ONLY the selected value.\n"
+        "FORBIDDEN:\n"
+        "- NEVER use words after 'with' for pattern selection.\n"
+        "- NEVER select replacement values as patterns.\n"
+        "- NEVER merge identical words across roles (same word ≠ same role).\n"
+        "\n"
+        "POSITION PRIORITY:\n"
+        "- BEFORE 'with' → always higher priority than any semantic meaning.\n"
+        "- AFTER 'with' → completely ignored for this task.\n"
+        "\n"
+        "EXAMPLE BEHAVIOR:\n"
+        "- 'Replace all numbers ... with NUMBERS' → pattern = 'numbers' ONLY\n"
+        "- 'Replace X with Y' → pattern = X, replacement = Y (do not mix)\n"
         "\n"
         f"Function: {func_def.name}\n"
-        f"Description: {func_def.description}\n"
         f"Parameters: {all_params}\n"
-        f"Parameter to fill: {param}\n"
-        f"Available options: {string_options}\n"
+        f"Target parameter: {param}\n"
+        f"Options: {string_options}\n"
+        "<|im_end|>\n"
+        f"<|im_start|>user\n{prompt}\n<|im_end|>\n"
+        "<|im_start|>assistant\n"
+    )
+
+
+def get_instruction_funcparam_replacement(prompt: str,
+                                          func_def: CallMeFunction,
+                                          param: str,
+                                          string_options: list[str]) -> str:
+    """
+    Returns the Builded prompt to guide the LLM to
+    choose the best tokens of a function parameter of type string
+    and is more probable to be a replacement
+    """
+    all_params: dict[str, str] = {}
+    for param_name, param_value in func_def.parameters.items():
+        all_params[param_name] = param_value.type
+
+    return (
+        "<|im_start|>system\n"
+        "You select EXACTLY ONE option representing a REPLACEMENT value.\n"
+        "\n"
+        "HARD RULES:\n"
+        "- Output ONE option only.\n"
+        "- Must match EXACTLY one of the available options.\n"
+        "\n"
+        "CORE HEURISTIC (VERY IMPORTANT):\n"
+        "- Words AFTER 'with' → VERY HIGH probability = REPLACEMENT\n"
+        "- Words AFTER 'into', 'as', 'to' → HIGH probability = REPLACEMENT\n"
+        "- Words AFTER 'all', 'every', 'find', 'match' → NOT replacement\n"
+        "- Position in sentence > meaning\n"
+        "\n"
+        "REPLACEMENT THINKING:\n"
+        "- Select what the original text becomes\n"
+        "- Prefer output/result values, not categories\n"
+        "- Often concrete or formatted values (e.g., 'X', '123', 'dash')\n"
+        "\n"
+        "NEGATIVE FILTER:\n"
+        "- Ignore patterns (e.g., 'digits', 'vowels', 'spaces')\n"
+        "- Ignore what is being searched or matched\n"
+        "- Ignore verbs/actions\n"
+        "\n"
+        "PRIORITY ORDER:\n"
+        "1. After 'with'\n"
+        "2. After 'into' / 'as' / 'to'\n"
+        "3. Best matching result/output token\n"
+        "\n"
+        f"Function: {func_def.name}\n"
+        f"Parameters: {all_params}\n"
+        f"Target parameter: {param}\n"
+        f"Options: {string_options}\n"
         "<|im_end|>\n"
         f"<|im_start|>user\n{prompt}\n<|im_end|>\n"
         "<|im_start|>assistant\n"
