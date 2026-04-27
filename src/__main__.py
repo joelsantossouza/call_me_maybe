@@ -47,13 +47,32 @@ if __name__ == "__main__":
 
     # Choose best function name
     decoder: Decoder = Decoder()
+    final_output: list[dict[str, str]] = []
 
     for prompt in loader.prompts:
+        print(prompt.prompt)
         func_name: str = decoder.decode_func_name(
             prompt.prompt, loader.func_names, loader.func_definitions
         )
+        print(f"function: {func_name}")
 
         # Fill the function parameters value
-        decoder.decode_func_params(
+        params: dict[str, str] = decoder.decode_func_params(
             prompt.prompt, loader.func_definitions[func_name]
         )
+        print(f"params: {params}")
+
+        final_output.append(
+            {
+                "prompt": prompt.prompt,
+                "name": func_name,
+                "parameters": params
+            }
+        )
+        print("----\n")
+    # Write results on output file
+    try:
+        with open(args.output, "w") as outfile:
+            json.dump(final_output, outfile, indent=2)
+    except Exception as err:
+        print(f"Error: {err}")

@@ -86,20 +86,16 @@ class Decoder:
         already_got: set[str] = set()
         result: dict[str, str] = {}
 
-        print(prompt)
-        print(func_def.name, ":")
         for param in reversed(list(func_def.parameters.keys())):
             instruction, options = self.get_instruction_funcparam(
                 prompt, func_def, param
             )
             options = [opt for opt in options if opt not in already_got]
-            print("options:", options)
             option: str = self.decode_options(
                 options, instruction
             )
             already_got.add(option)
             result[param] = option
-            print(f"{param} = {option}")
         return result
 
     def decode_func_name(self, prompt: str, func_names: set[str],
@@ -109,7 +105,6 @@ class Decoder:
         instruction: str = get_instruction_funcname(prompt, func_defs)
         func_names.add("fn_none")
 
-        print(f"\n\n{prompt}")
         while True:
             ids: list[int] = llm.encode(instruction + decoded_func).tolist()[0]
             logits: list[float] = llm.get_logits_from_input_ids(ids)
