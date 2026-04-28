@@ -63,8 +63,7 @@ class Decoder:
         return (
             get_instruction_funcparam_number(
                 prompt, func_def, param, opts
-            ),
-            opts
+            ), opts
         )
 
     def decode_options(self, options: list[str],
@@ -96,7 +95,7 @@ class Decoder:
             )
             already_got.add(option)
             result[param] = option
-        return result
+        return dict(reversed(list(result.items())))
 
     def decode_func_name(self, prompt: str, func_names: set[str],
                          func_defs: dict[str, CallMeFunction]) -> str:

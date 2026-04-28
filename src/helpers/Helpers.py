@@ -32,10 +32,10 @@ def vocab_filter_funcsname_prefix(vocab: dict[str, int], funcsname: set[str],
 
 def extract_numbers(text: str) -> list[str]:
     """
-    Return a list of string containing all numbers present
-    on text
+    Return a list of strings representing numbers in float format
     """
-    return re.findall(r"-?\d+\.?\d*", text)
+    matches = re.findall(r"-?\d+\.?\d*", text)
+    return [str(float(num)) for num in matches]
 
 
 def extract_names(text: str) -> list[str]:
