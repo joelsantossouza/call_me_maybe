@@ -45,6 +45,7 @@ if __name__ == "__main__":
             loader.load_prompts(data)
     except Exception as error_msg:
         print(f"Error: {error_msg}")
+        exit(1)
 
     # Choose best function name
     decoder: Decoder = Decoder()
@@ -79,3 +80,4 @@ if __name__ == "__main__":
             json.dump(final_output, outfile, indent=2)
     except Exception as err:
         print(f"Error: {err}")
+        exit(1)
