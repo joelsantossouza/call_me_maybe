@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from argparse import ArgumentParser, Namespace
 from .callme_files_loader import CallMeFilesLoader
 from .decoder import Decoder
@@ -72,6 +73,8 @@ if __name__ == "__main__":
         print("----\n")
     # Write results on output file
     try:
+        output_path: Path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(args.output, "w") as outfile:
             json.dump(final_output, outfile, indent=2)
     except Exception as err:
