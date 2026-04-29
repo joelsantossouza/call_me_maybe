@@ -68,6 +68,40 @@ def extract_nouns(text: str) -> list[str]:
     return extract_names(text_without_quotes) + strings
 
 
+def extract_keywords(text: str) -> list[str]:
+    """
+    Extract meaningful keywords/nouns from text for function matching.
+    Focuses on action words and key concepts.
+    """
+    # Convert to lowercase for matching
+    text_lower = text.lower()
+
+    # Remove punctuation, treat underscores as separators, and split into words
+    words = re.findall(r'[a-z]+', text_lower)
+
+    # Common stopwords to filter out
+    stopwords = {
+        'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+        'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+        'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+        'should', 'may', 'might', 'must', 'can', 'shall', 'what', 'how',
+        'when', 'where', 'why', 'which', 'who', 'that', 'this', 'these',
+        'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him',
+        'her', 'us', 'them', 'my', 'your', 'his', 'its', 'our', 'their'
+    }
+
+    # Keep only meaningful keywords
+    keywords = [word for word in words if word not in stopwords and len(word) > 2]
+
+    # Also include short quoted strings (single words or short phrases)
+    # but exclude long strings that are entire sentences
+    quoted_strings = extract_strings(text)
+    short_quoted = [s.lower() for s in quoted_strings if len(s.split()) <= 3]  # Max 3 words
+    keywords.extend(short_quoted)
+
+    return list(set(keywords))  # Remove duplicates
+
+
 def get_instruction_funcname(
         prompt: str, func_defs: dict[str, CallMeFunction]) -> str:
     """
@@ -75,33 +109,41 @@ def get_instruction_funcname(
     choose the best tokens of a function name
     """
 
+    # Build dynamic function list with descriptions
     avail_funcs: list[str] = [
-        f"{func_name} - {func_def.description}"
+        f"{func_name}: {func_def.description}"
         for func_name, func_def in func_defs.items()
     ]
+    funcs_list: str = "\n".join(avail_funcs)
+
     return (
         "<|im_start|>system\n"
-        "You are a strict function selector.\n"
-        "RULES:\n"
-        "1. If the prompt contains 'replace', 'with', or 'regex', "
-        "you MUST use 'fn_substitute_string_with_regex'.\n"
-        "2. NEVER use 'fn_execute_sql_query' unless keywords like "
-        "'SELECT', 'INSERT', 'UPDATE' or 'DATABASE' are present.\n"
-        "3. If no function matches the intent exactly, return 'fn_none'.\n"
-        "4. NEVER use 'fn_greet' unless the prompt explicitly asks to "
-        "Greet/greet or say hello to a person.\n"
-        "5. NEVER use any function if the prompt asks for something "
-        "none of the functions can do.\n"
-        "6. NEVER use 'fn_get_square_root' unless the prompt explicitly "
-        "mentions 'square root', 'sqrt', 'square root of', or "
-        "'raiz quadrada'. The word 'square' alone does NOT trigger "
-        "this function.\n"
-        "7. NEVER use 'fn_execute_sql_query' for mathematical "
-        "expressions like '^', 'power', or 'exponent'.\n"
-        "8. NEVER use 'fn_calculate_compound_interest' unless the prompt "
-        "explicitly mentions 'interest', 'rate', "
-        "'principal', or 'compound'.\n"
-        f"Available Functions:\n{avail_funcs}\n"
+        "You are a strict function selector. Your job is to choose the "
+        "BEST function that matches the user's intent.\n\n"
+        "CORE RULES:\n"
+        "1. Analyze the prompt to understand what the user wants to do.\n"
+        "2. Match the user intent to the function that best fulfills it.\n"
+        "3. Consider function descriptions carefully.\n"
+        "4. If the prompt intent doesn't match ANY function, return "
+        "'fn_none'.\n"
+        "5. Prefer exact keyword matches in function names or descriptions.\n"
+        "6. Do NOT guess or assume - match only what is explicitly stated "
+        "in the prompt.\n"
+        "7. Output ONLY the function name (e.g., 'fn_add_numbers'), "
+        "nothing else.\n\n"
+        "MATCHING STRATEGY:\n"
+        "- Keywords in prompt → Look for matching function names or "
+        "description keywords\n"
+        "- Mathematical operations (multiply, divide, add, subtract, "
+        "power, compound, interest, etc.) → Match with math functions\n"
+        "- String operations (reverse, format, read, execute, query, etc.) "
+        "→ Match with string/data functions\n"
+        "- Type checks (even, odd, prime, etc.) → Match with boolean "
+        "functions\n\n"
+        "Available Functions:\n"
+        f"{funcs_list}\n\n"
+        "Remember: Choose the function that BEST matches the prompt intent. "
+        "Output ONLY the function name.\n"
         "<|im_end|>\n"
         f"<|im_start|>user\n{prompt}\n<|im_end|>\n"
         "<|im_start|>assistant\n"

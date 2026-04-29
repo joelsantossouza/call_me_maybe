@@ -6,6 +6,7 @@ from .Helpers import (
     extract_strings,
     extract_names,
     extract_nouns,
+    extract_keywords,
     get_instruction_funcname,
     get_instruction_funcparam_number,
     get_instruction_funcparam_string,
