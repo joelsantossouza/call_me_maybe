@@ -47,7 +47,7 @@ class Decoder:
                         prompt, func_def, param, opts
                     ), opts
                 )
-            if "replace" in param:
+            if "replace" in param or param in ("database", "encoding"):
                 opts: list[str] = extract_nouns(prompt)
                 return (
                     get_instruction_funcparam_replacement(
@@ -55,6 +55,7 @@ class Decoder:
                     ), opts
                 )
             opts: list[str] = extract_strings(prompt)
+            print(opts)
             return (
                 get_instruction_funcparam_string(
                     prompt, func_def, param, opts
@@ -70,6 +71,9 @@ class Decoder:
     def decode_options(self, options: list[str],
                        instruction: str) -> str:
         llm: Small_LLM_Model = self.llm
+
+        if not options:
+            return "none"
 
         if len(options) == 1:
             return options[0]
@@ -125,7 +129,8 @@ class Decoder:
                 return 0.0, -float('inf')
 
             # Extract keywords from function name and description
-            func_name_keywords: list[str] = extract_keywords(func_name.replace('fn_', ' '))
+            func_name_keywords: list[str] = extract_keywords(
+                func_name.replace('fn_', ' '))
             desc_keywords: set[str] = set(
                 extract_keywords(func_def.description) + func_name_keywords
             )
@@ -142,7 +147,8 @@ class Decoder:
                 full_text: str = instruction + func_with_desc
                 ids: list[int] = self.llm.encode(full_text).tolist()[0]
                 logits: list[float] = self.llm.get_logits_from_input_ids(ids)
-                llm_score = sum(logits) / len(logits) if logits else -float('inf')
+                llm_score = sum(logits) / \
+                    len(logits) if logits else -float('inf')
             except Exception:
                 llm_score = -float('inf')
 
@@ -165,7 +171,8 @@ class Decoder:
 
         # For low-confidence matches, fall back to LLM scoring but make it faster
         # by only scoring the top 2-3 candidates by keyword score
-        top_candidates = [c[0] for c in scored_candidates[:3]]  # Top 3 by keywords
+        top_candidates = [c[0]
+                          for c in scored_candidates[:3]]  # Top 3 by keywords
         llm_scores = []
         for candidate in top_candidates:
             try:
@@ -180,7 +187,8 @@ class Decoder:
                     full_text = instruction + func_with_desc
                     ids = self.llm.encode(full_text).tolist()[0]
                     logits = self.llm.get_logits_from_input_ids(ids)
-                    score = sum(logits) / len(logits) if logits else -float('inf')
+                    score = sum(logits) / \
+                        len(logits) if logits else -float('inf')
                     llm_scores.append((candidate, score))
                 else:
                     llm_scores.append((candidate, -float('inf')))

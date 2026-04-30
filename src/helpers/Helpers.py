@@ -42,7 +42,7 @@ def extract_names(text: str) -> list[str]:
     """
     Return all words closest to names in text
     """
-    words: list[str] = re.findall(r"\b[a-zA-Z]+\b", text)
+    words: list[str] = re.findall(r"[a-zA-Z]\S*", text)
     stopwords: list[str] = [
         "the", "and", "what", "is", "to", "of",
         "in", "on", "times", "never", "forget", "too",
@@ -53,19 +53,36 @@ def extract_names(text: str) -> list[str]:
 
 def extract_strings(text: str) -> list[str]:
     """
-    Return all substrings inside single or double quotes
+    Return all words closest to substrings in text
     """
-    matches = re.findall(r'"([^"]*)"|\'([^\']*)\'', text)
-    return [m[0] or m[1] for m in matches]
+
+    # 1. quoted strings
+    quoted = re.findall(r'"([^"]*)"|\'([^\']*)\'', text)
+    quoted = [m[0] or m[1] for m in quoted]
+
+    additional = (
+        re.findall(r"/[^\s\"']+", text) +
+        re.findall(r"[A-Za-z]:\\[^\s\"']+", text)
+    )
+
+    return list(dict.fromkeys(quoted + additional))
 
 
 def extract_nouns(text: str) -> list[str]:
     """
-    Return all words closest to nouns in text
+    Return all words closest to nouns in text,
+    excluding already extracted quoted strings.
     """
+
     strings: list[str] = extract_strings(text)
-    text_without_quotes: str = re.sub(r'"([^"]*)"|\'([^\']*)\'',  "", text)
-    return extract_names(text_without_quotes) + strings
+    text_without_strings = text
+    for s in strings:
+        if s:
+            text_without_strings = text_without_strings.replace(f'"{s}"', "")
+            text_without_strings = text_without_strings.replace(f"'{s}'", "")
+            text_without_strings = text_without_strings.replace(s, "")
+
+    return extract_names(text_without_strings) + strings
 
 
 def extract_keywords(text: str) -> list[str]:
@@ -91,12 +108,14 @@ def extract_keywords(text: str) -> list[str]:
     }
 
     # Keep only meaningful keywords
-    keywords = [word for word in words if word not in stopwords and len(word) > 2]
+    keywords = [
+        word for word in words if word not in stopwords and len(word) > 2]
 
     # Also include short quoted strings (single words or short phrases)
     # but exclude long strings that are entire sentences
     quoted_strings = extract_strings(text)
-    short_quoted = [s.lower() for s in quoted_strings if len(s.split()) <= 3]  # Max 3 words
+    short_quoted = [s.lower() for s in quoted_strings if len(
+        s.split()) <= 3]  # Max 3 words
     keywords.extend(short_quoted)
 
     return list(set(keywords))  # Remove duplicates

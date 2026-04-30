@@ -1,87 +1,32 @@
 [
   {
-    "prompt": "What is the sum of 2 and 3?",
-    "name": "fn_add_numbers",
+    "prompt": "Read the file at /home/user/data.json with utf-8 encoding",
+    "name": "fn_read_file",
     "parameters": {
-      "a": "2.0",
-      "b": "3.0"
+      "path": "/home/user/data.json",
+      "encoding": "utf-8"
     }
   },
   {
-    "prompt": "What is the sum of 265 and 345?",
-    "name": "fn_add_numbers",
+    "prompt": "Read C:\\Users\\john\\config.ini with latin-1 encoding",
+    "name": "fn_read_file",
     "parameters": {
-      "a": "265.0",
-      "b": "345.0"
+      "path": "none",
+      "encoding": "latin-1"
     }
   },
   {
-    "prompt": "Greet shrek",
-    "name": "fn_greet",
+    "prompt": "Format template: Hello {user}'s profile!",
+    "name": "fn_format_template",
     "parameters": {
-      "name": "shrek"
+      "template": "none"
     }
   },
   {
-    "prompt": "Greet john",
-    "name": "fn_greet",
+    "prompt": "Format template: Say \"hello\" to {name}",
+    "name": "fn_format_template",
     "parameters": {
-      "name": "john"
-    }
-  },
-  {
-    "prompt": "Reverse the string 'hello'",
-    "name": "fn_reverse_string",
-    "parameters": {
-      "s": "hello"
-    }
-  },
-  {
-    "prompt": "Reverse the string 'world'",
-    "name": "fn_reverse_string",
-    "parameters": {
-      "s": "world"
-    }
-  },
-  {
-    "prompt": "What is the square root of 16?",
-    "name": "fn_get_square_root",
-    "parameters": {
-      "a": "16.0"
-    }
-  },
-  {
-    "prompt": "Calculate the square root of 144",
-    "name": "fn_get_square_root",
-    "parameters": {
-      "a": "144.0"
-    }
-  },
-  {
-    "prompt": "Replace all numbers in \"Hello 34 I'm 233 years old\" with NUMBERS",
-    "name": "fn_substitute_string_with_regex",
-    "parameters": {
-      "source_string": "Hello 34 I'm 233 years old",
-      "regex": "numbers",
-      "replacement": "NUMBERS"
-    }
-  },
-  {
-    "prompt": "Replace all vowels in 'Programming is fun' with asterisks",
-    "name": "fn_substitute_string_with_regex",
-    "parameters": {
-      "source_string": "Programming is fun",
-      "regex": "vowels",
-      "replacement": "asterisks"
-    }
-  },
-  {
-    "prompt": "Substitute the word 'cat' with 'dog' in 'The cat sat on the mat with another cat'",
-    "name": "fn_substitute_string_with_regex",
-    "parameters": {
-      "source_string": "The cat sat on the mat with another cat",
-      "regex": "cat",
-      "replacement": "dog"
+      "template": "hello"
     }
   }
 ]
