@@ -1,3 +1,4 @@
+from typing import Dict
 from llm_sdk import Small_LLM_Model
 from src.structures import Token
 from src.callme_files_loader import CallMeFunction
@@ -16,6 +17,58 @@ from src.helpers import (
     get_instruction_funcparam_replacement,
     get_instruction_funcparam_regex,
 )
+
+from typing import Dict, List, Any
+
+MAX_FUNC_NAME_TOKENS = 20
+
+
+def build_prefix_trie(fn_token_sequences: Dict[str, List[int]]) -> Dict[str, Any]:
+    """
+    Build a prefix trie from token sequences.
+    Each path in the trie corresponds to a valid function name.
+    """
+    root: Dict[str, Any] = {}
+
+    for seq in fn_token_sequences.values():
+        node = root
+        for token_id in seq:
+            if token_id not in node:
+                node[token_id] = {}
+            node = node[token_id]
+        node["__END__"] = True
+
+    return root
+
+
+def build_instruction_for_func_name(
+    prompt: str,
+    func_defs: Dict[str, Any]
+) -> str:
+    """
+    Build the instruction text that tells the LLM to output only a function name.
+    """
+    fn_list = ", ".join(func_defs.keys())
+    return (
+        "You must select exactly one function name from the following list: "
+        f"{fn_list}. "
+        "Output ONLY the function name, with no punctuation, no quotes, "
+        "no explanation. "
+        f"User request: {prompt}\nFunction name: "
+    )
+
+
+def is_valid_prefix(candidate: List[int], trie: Dict[str, Any]) -> bool:
+    """
+    Check whether the candidate token sequence is a valid prefix
+    of any function name in the trie.
+    """
+    node = trie
+    for token_id in candidate:
+        if token_id not in node:
+            return False
+        node = node[token_id]
+    return True
 
 
 class Decoder:
@@ -102,98 +155,55 @@ class Decoder:
             result[param] = option
         return dict(reversed(list(result.items())))
 
-    def decode_func_name(self, prompt: str, func_names: set[str],
-                         func_defs: dict[str, CallMeFunction]) -> str:
+    def decode_func_name(
+        self,
+        prompt: str,
+        func_names: set[str],
+        func_defs: dict[str, CallMeFunction]
+    ) -> str:
         """
-        Score each candidate function using keyword matching between prompt
-        and function descriptions. This is more reliable than pure LLM scoring.
+        Select a function name using constrained decoding.
+        No heuristics. No keyword scoring.
         """
-        # Extract keywords from the prompt
-        prompt_keywords: set[str] = set(extract_keywords(prompt))
 
-        # Add fn_none as fallback
-        candidates: set[str] = func_names.copy()
-        candidates.add("fn_none")
+        # 1. Build vocabulary mapping
+        vocab = self.vocab
 
-        def score_function(func_name: str) -> tuple[float, float]:
-            """
-            Score a function using keyword overlap and LLM confidence.
-            Returns (keyword_score, llm_score) for tie-breaking.
-            """
-            if func_name == "fn_none":
-                # fn_none gets zero score for keywords, low LLM score
-                return 0.0, -float('inf')
+        # 2. Encode all function names into token sequences
+        fn_token_sequences = {
+            name: self.llm.encode(name).tolist()[0]
+            for name in func_names
+        }
 
-            func_def: CallMeFunction = func_defs.get(func_name)
-            if not func_def:
-                return 0.0, -float('inf')
+        # 3. Build prefix trie for allowed token sequences
+        trie = build_prefix_trie(fn_token_sequences)
 
-            # Extract keywords from function name and description
-            func_name_keywords: list[str] = extract_keywords(
-                func_name.replace('fn_', ' '))
-            desc_keywords: set[str] = set(
-                extract_keywords(func_def.description) + func_name_keywords
-            )
+        # 4. Build the initial prompt
+        instruction = build_instruction_for_func_name(prompt, func_defs)
+        input_ids = self.llm.encode(instruction).tolist()[0]
 
-            # Calculate keyword overlap score (Jaccard similarity)
-            intersection = len(prompt_keywords & desc_keywords)
-            union = len(prompt_keywords | desc_keywords)
-            keyword_score = intersection / union if union > 0 else 0.0
+        generated: list[int] = []
 
-            # Also get LLM score as tiebreaker
-            try:
-                instruction: str = get_instruction_funcname(prompt, func_defs)
-                func_with_desc: str = f"{func_name}: {func_def.description}"
-                full_text: str = instruction + func_with_desc
-                ids: list[int] = self.llm.encode(full_text).tolist()[0]
-                logits: list[float] = self.llm.get_logits_from_input_ids(ids)
-                llm_score = sum(logits) / \
-                    len(logits) if logits else -float('inf')
-            except Exception:
-                llm_score = -float('inf')
+        while True:
+            # 5. Get logits for next token
+            logits = self.llm.get_logits_from_input_ids(input_ids + generated)
 
-            return keyword_score, llm_score
+            # 6. Filter logits using constrained decoding
+            for token_id in range(len(logits)):
+                candidate_sequence = generated + [token_id]
 
-        # Score all candidates
-        scored_candidates = []
-        for candidate in candidates:
-            keyword_score, llm_score = score_function(candidate)
-            scored_candidates.append((candidate, keyword_score, llm_score))
+                if not is_valid_prefix(candidate_sequence, trie):
+                    logits[token_id] = float('-inf')
 
-        # Sort by keyword score first, then LLM score as tiebreaker
-        scored_candidates.sort(key=lambda x: (x[1], x[2]), reverse=True)
+            # 7. Select next token
+            next_token = max(enumerate(logits), key=lambda x: x[1])[0]
+            generated.append(next_token)
 
-        # If the top match has a reasonable keyword score (>0.05), use it directly
-        # This avoids expensive LLM calls for clear matches
-        top_match = scored_candidates[0]
-        if top_match[1] > 0.05:  # Jaccard score > 0.05 (5% overlap)
-            return top_match[0]
+            # 8. Check if we reached a full function name
+            decoded = self.llm.decode(generated)
+            if decoded in func_names:
+                return decoded
 
-        # For low-confidence matches, fall back to LLM scoring but make it faster
-        # by only scoring the top 2-3 candidates by keyword score
-        top_candidates = [c[0]
-                          for c in scored_candidates[:3]]  # Top 3 by keywords
-        llm_scores = []
-        for candidate in top_candidates:
-            try:
-                if candidate == "fn_none":
-                    llm_scores.append((candidate, -float('inf')))
-                    continue
-
-                func_def = func_defs.get(candidate)
-                if func_def:
-                    instruction = get_instruction_funcname(prompt, func_defs)
-                    func_with_desc = f"{candidate}: {func_def.description}"
-                    full_text = instruction + func_with_desc
-                    ids = self.llm.encode(full_text).tolist()[0]
-                    logits = self.llm.get_logits_from_input_ids(ids)
-                    score = sum(logits) / \
-                        len(logits) if logits else -float('inf')
-                    llm_scores.append((candidate, score))
-                else:
-                    llm_scores.append((candidate, -float('inf')))
-            except Exception:
-                llm_scores.append((candidate, -float('inf')))
-
-        llm_scores.sort(key=lambda x: x[1], reverse=True)
-        return llm_scores[0][0]
+            # 9. Safety: prevent infinite loops
+            if len(generated) > MAX_FUNC_NAME_TOKENS:
+                return "fn_none"
