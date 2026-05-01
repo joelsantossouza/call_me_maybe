@@ -1,15 +1,10 @@
+import math
 from typing import Dict
 from llm_sdk import Small_LLM_Model
-from src.structures import Token
 from src.callme_files_loader import CallMeFunction
 from src.helpers import (
     llm_vocab_load,
     vocab_filter_funcsname_prefix,
-    extract_numbers,
-    extract_strings,
-    extract_names,
-    extract_nouns,
-    extract_keywords,
     get_instruction_funcname,
     get_instruction_funcparam_number,
     get_instruction_funcparam_string,
@@ -18,9 +13,14 @@ from src.helpers import (
     get_instruction_funcparam_regex,
 )
 
+import re
 from typing import Dict, List, Any
 
-MAX_FUNC_NAME_TOKENS = 20
+MAX_TOKENS = 20
+STOP_WORDS = {
+    "replace", "all", "with", "in", "on", "at", "the", "a", "an",
+    "and", "or", "of", "to", "for", "by", "is", "are", "be"
+}
 
 
 def build_prefix_trie(fn_token_sequences: Dict[str, List[int]]) -> Dict[str, Any]:
@@ -71,6 +71,93 @@ def is_valid_prefix(candidate: List[int], trie: Dict[str, Any]) -> bool:
     return True
 
 
+def extract_numbers(prompt: str) -> list[str]:
+    """Extract int and float values."""
+    return re.findall(r"-?\d+(?:\.\d+)?", prompt)
+
+
+def extract_ints(prompt: str) -> list[str]:
+    """Extract integer values."""
+    return re.findall(r"-?\d+", prompt)
+
+
+def extract_strings(prompt: str) -> list[str]:
+    """
+    Extract:
+      - quoted substrings as single units
+      - unquoted nouns (alphabetic words)
+    Without splitting quoted strings into words.
+    """
+    results = []
+
+    # 1. Extract quoted substrings
+    quoted = re.findall(r'"([^"]*)"|\'([^\']*)\'', prompt)
+    quoted = [q[0] or q[1] for q in quoted]
+
+    results.extend(quoted)
+
+    # 2. Remove quoted substrings from the prompt
+    cleaned = re.sub(r'"[^"]*"|\'[^\']*\'', ' ', prompt)
+
+    # 3. Extract nouns (alphabetic words)
+    nouns = re.findall(r'\b[a-zA-Z]{2,}\b', cleaned)
+
+    results.extend(nouns)
+
+    filtered = [
+        s for s in results
+        if s.lower() not in STOP_WORDS
+    ]
+    return filtered
+
+
+def build_instruction_for_func_params(
+    prompt: str,
+    param: str,
+    options: list[str],
+    func: CallMeFunction
+) -> str:
+
+    opts_str = " | ".join(options)
+
+    return (
+        "<|im_start|>system\n"
+        "You select EXACTLY ONE value for a function parameter.\n\n"
+
+        "You MUST understand the transformation described by the user.\n"
+        "Think in terms of:\n"
+        "- original text\n"
+        "- what is searched\n"
+        "- what replaces it\n\n"
+
+        "STRICT RULES:\n"
+        "- source_string = the FULL original text\n"
+        "- regex = what is searched inside the text (or a category like 'numbers', 'vowels')\n"
+        "- replacement = what is inserted instead\n\n"
+
+        "HARD CONSTRAINTS (CRITICAL):\n"
+        "- source_string MUST be the longest text span\n"
+        "- regex MUST NOT be the full sentence\n"
+        "- replacement MUST NOT be part of the original sentence\n"
+        "- regex and replacement MUST NOT be swapped\n\n"
+
+        "If a candidate violates these constraints, DO NOT select it.\n\n"
+
+        "Output ONLY the selected value.\n"
+        "<|im_end|>\n"
+
+        f"<|im_start|>user\n"
+        f"Function: {func.name}\n"
+        f"Description: {func.description}\n\n"
+        f"Prompt:\n{prompt}\n\n"
+        f"Parameter: {param}\n"
+        f"Options: {opts_str}\n"
+        f"<|im_end|>\n"
+
+        f"<|im_start|>assistant\n"
+    )
+
+
 class Decoder:
     """
     Implements decoding to generate the most probable outputs using a LLM
@@ -80,80 +167,106 @@ class Decoder:
         self.llm: Small_LLM_Model = Small_LLM_Model()
         self.vocab: dict[str, int] = llm_vocab_load(self.llm)
 
-    @staticmethod
-    def get_instruction_funcparam(prompt: str,
-                                  func_def: CallMeFunction,
-                                  param: str) -> tuple:
-        func_param_type: str = func_def.parameters[param].type
-        if func_param_type == "string":
-            if param == "name":
-                opts: list[str] = extract_names(prompt)
-                return (
-                    get_instruction_funcparam_name(
-                        prompt, func_def, param, opts
-                    ), opts
-                )
-            if "regex" in param:
-                opts: list[str] = extract_nouns(prompt)
-                return (
-                    get_instruction_funcparam_regex(
-                        prompt, func_def, param, opts
-                    ), opts
-                )
-            if "replace" in param or param in ("database", "encoding"):
-                opts: list[str] = extract_nouns(prompt)
-                return (
-                    get_instruction_funcparam_replacement(
-                        prompt, func_def, param, opts
-                    ), opts
-                )
-            opts: list[str] = extract_strings(prompt)
-            print(opts)
-            return (
-                get_instruction_funcparam_string(
-                    prompt, func_def, param, opts
-                ), opts
-            )
-        opts: list[str] = extract_numbers(prompt)
-        return (
-            get_instruction_funcparam_number(
-                prompt, func_def, param, opts
-            ), opts
-        )
+    def extract_params_options(self, func: CallMeFunction,
+                               param: str, prompt: str) -> list[str]:
+        """
+        Given a parameter it extract the possible values by its
+        type(number | integer | string)
+        """
+        ptype = func.parameters[param].type
 
-    def decode_options(self, options: list[str],
-                       instruction: str) -> str:
-        llm: Small_LLM_Model = self.llm
+        if ptype == "number":
+            options = extract_numbers(prompt)
 
+        elif ptype == "integer":
+            options = extract_ints(prompt)
+
+        else:  # string
+            options = extract_strings(prompt)
+        return options
+
+    def constrained_decode_from_options(
+        self,
+        instruction: str,
+        options: list[str]
+    ) -> str:
+        """
+        Generic constrained decoder that selects exactly one string from a list
+        of allowed options using token-by-token constrained decoding.
+        """
         if not options:
             return "none"
 
         if len(options) == 1:
             return options[0]
 
-        def score(option: str) -> float:
-            ids: list[int] = llm.encode(instruction + option).tolist()[0]
-            logits: list[float] = llm.get_logits_from_input_ids(ids)
-            return max(logits)
+        llm = self.llm
 
-        return max(options, key=score)
+        # Encode all options into token sequences
+        option_token_sequences = {
+            opt: llm.encode(opt).tolist()[0] for opt in options
+        }
 
-    def decode_func_params(self, prompt: str,
-                           func_def: CallMeFunction) -> dict[str, str]:
-        already_got: set[str] = set()
-        result: dict[str, str] = {}
+        # Build prefix trie
+        trie = build_prefix_trie(option_token_sequences)
 
-        for param in reversed(list(func_def.parameters.keys())):
-            instruction, options = self.get_instruction_funcparam(
-                prompt, func_def, param
+        # Encode instruction
+        input_ids = llm.encode(instruction).tolist()[0]
+
+        generated: list[int] = []
+
+        while True:
+            # Get logits
+            logits = llm.get_logits_from_input_ids(input_ids + generated)
+
+            # Mask invalid tokens
+            for token_id in range(len(logits)):
+                candidate = generated + [token_id]
+                if not is_valid_prefix(candidate, trie):
+                    logits[token_id] = float('-inf')
+
+            # Select next token
+            next_token = max(enumerate(logits), key=lambda x: x[1])[0]
+            generated.append(next_token)
+
+            # Decode partial output
+            decoded = llm.decode(generated)
+
+            # Check if we reached a full option
+            if decoded in options:
+                return decoded
+
+            # Safety
+            if len(generated) > MAX_TOKENS:
+                return options[0]
+
+    def decode_func_params(self, prompt, func_def):
+        """
+        Decode all parameters of a function using constrained decoding.
+        For each parameter:
+          - extract candidate options
+          - build an instruction
+          - use constrained decoding to choose exactly one option
+        """
+        result = {}
+        used = set()   # track already chosen values
+
+        for param in func_def.parameters.keys():
+            options = self.extract_params_options(func_def, param, prompt)
+
+            # Remove already-used values
+            options = [opt for opt in options if opt not in used]
+
+            instruction = build_instruction_for_func_params(
+                prompt, param, options, func_def
             )
-            options = [opt for opt in options if opt not in already_got]
-            option: str = self.decode_options(
-                options, instruction
-            )
-            already_got.add(option)
-            result[param] = option
-        return dict(reversed(list(result.items())))
+
+            chosen = self.constrained_decode_from_options(instruction, options)
+            result[param] = chosen
+
+            used.add(chosen)   # mark as used
+
+        return result
 
     def decode_func_name(
         self,
@@ -161,49 +274,6 @@ class Decoder:
         func_names: set[str],
         func_defs: dict[str, CallMeFunction]
     ) -> str:
-        """
-        Select a function name using constrained decoding.
-        No heuristics. No keyword scoring.
-        """
-
-        # 1. Build vocabulary mapping
-        vocab = self.vocab
-
-        # 2. Encode all function names into token sequences
-        fn_token_sequences = {
-            name: self.llm.encode(name).tolist()[0]
-            for name in func_names
-        }
-
-        # 3. Build prefix trie for allowed token sequences
-        trie = build_prefix_trie(fn_token_sequences)
-
-        # 4. Build the initial prompt
         instruction = build_instruction_for_func_name(prompt, func_defs)
-        input_ids = self.llm.encode(instruction).tolist()[0]
-
-        generated: list[int] = []
-
-        while True:
-            # 5. Get logits for next token
-            logits = self.llm.get_logits_from_input_ids(input_ids + generated)
-
-            # 6. Filter logits using constrained decoding
-            for token_id in range(len(logits)):
-                candidate_sequence = generated + [token_id]
-
-                if not is_valid_prefix(candidate_sequence, trie):
-                    logits[token_id] = float('-inf')
-
-            # 7. Select next token
-            next_token = max(enumerate(logits), key=lambda x: x[1])[0]
-            generated.append(next_token)
-
-            # 8. Check if we reached a full function name
-            decoded = self.llm.decode(generated)
-            if decoded in func_names:
-                return decoded
-
-            # 9. Safety: prevent infinite loops
-            if len(generated) > MAX_FUNC_NAME_TOKENS:
-                return "fn_none"
+        options = list(func_names)
+        return self.constrained_decode_from_options(instruction, options)
