@@ -184,8 +184,23 @@ class Decoder:
         else:
             options = extract_strings(prompt)
 
-        print(options)
-        return options
+        clean = set()
+        clean.add(func.name.lower())
+        for part in func.name.lower().split("_"):
+            clean.add(part)
+        for p in func.parameters.keys():
+            p_lower = p.lower()
+            clean.add(p_lower)
+            for part in p_lower.split("_"):
+                clean.add(part)
+
+        cleaned = [
+            opt for opt in options
+            if opt.lower() not in clean
+        ]
+
+        print(cleaned)
+        return cleaned
 
     def constrained_decode_from_options(
         self,
@@ -204,41 +219,32 @@ class Decoder:
 
         llm = self.llm
 
-        # Encode all options into token sequences
         option_token_sequences = {
             opt: llm.encode(opt).tolist()[0] for opt in options
         }
 
-        # Build prefix trie
         trie = build_prefix_trie(option_token_sequences)
 
-        # Encode instruction
         input_ids = llm.encode(instruction).tolist()[0]
 
         generated: list[int] = []
 
         while True:
-            # Get logits
             logits = llm.get_logits_from_input_ids(input_ids + generated)
 
-            # Mask invalid tokens
             for token_id in range(len(logits)):
                 candidate = generated + [token_id]
                 if not is_valid_prefix(candidate, trie):
                     logits[token_id] = float('-inf')
 
-            # Select next token
             next_token = max(enumerate(logits), key=lambda x: x[1])[0]
             generated.append(next_token)
 
-            # Decode partial output
             decoded = llm.decode(generated)
 
-            # Check if we reached a full option
             if decoded in options:
                 return decoded
 
-            # Safety
             if len(generated) > MAX_TOKENS:
                 return options[0]
 
@@ -251,20 +257,15 @@ class Decoder:
         result = {}
         used = set()
 
-        # 1. Get original order
         original_params = list(func_def.parameters.keys())
 
-        # 2. Sort by descending length (longest name first)
         sorted_params = sorted(original_params, key=len, reverse=True)
 
-        # 3. Temporary storage for decoded values
         temp_values = {}
 
-        # 4. Decode in sorted order
         for param in sorted_params:
             options = self.extract_params_options(func_def, param, prompt)
 
-            # Remove already-used values
             options = [opt for opt in options if opt not in used]
 
             instruction = build_instruction_for_func_params(
@@ -275,7 +276,6 @@ class Decoder:
             temp_values[param] = chosen
             used.add(chosen)
 
-        # 5. Reconstruct result in original order
         for param in original_params:
             result[param] = temp_values[param]
 

@@ -51,7 +51,7 @@ if __name__ == "__main__":
     decoder: Decoder = Decoder()
     final_output: list[dict[str, str]] = []
 
-    for prompt in loader.prompts[8:]:
+    for prompt in loader.prompts:
         print(prompt.prompt)
         func_name: str = decoder.decode_func_name(
             prompt.prompt, loader.func_names, loader.func_definitions
