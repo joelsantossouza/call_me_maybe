@@ -18,8 +18,10 @@ from typing import Dict, List, Any
 
 MAX_TOKENS = 20
 STOP_WORDS = {
-    "replace", "all", "with", "in", "on", "at", "the", "a", "an",
-    "and", "or", "of", "to", "for", "by", "is", "are", "be"
+    "all", "with", "in", "on", "at", "the", "a", "an",
+    "and", "or", "of", "to", "for", "by", "is", "are", "be",
+    "substitute", "every", "each", "replace", "using", "use",
+    "where", "that", "this", "it", "its"
 }
 
 
@@ -72,20 +74,23 @@ def is_valid_prefix(candidate: List[int], trie: Dict[str, Any]) -> bool:
 
 
 def extract_numbers(prompt: str) -> list[str]:
-    """Extract int and float values."""
-    return re.findall(r"-?\d+(?:\.\d+)?", prompt)
+    """Extract int and float values, always returned as float strings."""
+    matches = re.findall(r"-?\d+(?:\.\d+)?", prompt)
+    return [str(float(m)) for m in matches]
 
 
 def extract_ints(prompt: str) -> list[str]:
-    """Extract integer values."""
-    return re.findall(r"-?\d+", prompt)
+    """Extract integer values only, excluding floats."""
+    return re.findall(r"-?\b\d+\b(?!\.\d)", prompt)
 
 
 def extract_strings(prompt: str) -> list[str]:
     """
     Extract:
       - quoted substrings as single units
-      - unquoted nouns (alphabetic words)
+      - colon-introduced substrings: text after ':' until a terminator (. ! ?)
+      - unquoted tokens: start with anything except a digit or whitespace,
+        end at whitespace
     Without splitting quoted strings into words.
     """
     results = []
@@ -93,16 +98,22 @@ def extract_strings(prompt: str) -> list[str]:
     # 1. Extract quoted substrings
     quoted = re.findall(r'"([^"]*)"|\'([^\']*)\'', prompt)
     quoted = [q[0] or q[1] for q in quoted]
-
     results.extend(quoted)
 
     # 2. Remove quoted substrings from the prompt
     cleaned = re.sub(r'"[^"]*"|\'[^\']*\'', ' ', prompt)
 
-    # 3. Extract nouns (alphabetic words)
-    nouns = re.findall(r'\b[a-zA-Z]{2,}\b', cleaned)
+    # 3. Extract colon-introduced substrings until a terminator
+    colon_values = re.findall(r':\s*([^.!?]+[.!?])', cleaned)
+    colon_values = [v.strip() for v in colon_values]
+    results.extend(colon_values)
 
-    results.extend(nouns)
+    # 4. Remove colon-introduced substrings from cleaned
+    cleaned = re.sub(r':\s*[^.!?]+[.!?]', ' ', cleaned)
+
+    # 5. Extract tokens that start with a non-digit, non-whitespace character
+    tokens = re.findall(r'[^\d\s][^\s]*', cleaned)
+    results.extend(tokens)
 
     filtered = [
         s for s in results
@@ -115,46 +126,37 @@ def build_instruction_for_func_params(
     prompt: str,
     param: str,
     options: list[str],
-    func: CallMeFunction
+    func_def: CallMeFunction
 ) -> str:
+    ptype = func_def.parameters[param].type
+    opts = " | ".join(options)
 
-    opts_str = " | ".join(options)
+    all_params_context = "\n".join(
+        f"- {p} ({func_def.parameters[p].type})"
+        for p in func_def.parameters
+    )
 
     return (
         "<|im_start|>system\n"
-        "You select EXACTLY ONE value for a function parameter.\n\n"
-
-        "You MUST understand the transformation described by the user.\n"
-        "Think in terms of:\n"
-        "- original text\n"
-        "- what is searched\n"
-        "- what replaces it\n\n"
-
-        "STRICT RULES:\n"
-        "- source_string = the FULL original text\n"
-        "- regex = what is searched inside the text (or a category like 'numbers', 'vowels')\n"
-        "- replacement = what is inserted instead\n\n"
-
-        "HARD CONSTRAINTS (CRITICAL):\n"
-        "- source_string MUST be the longest text span\n"
-        "- regex MUST NOT be the full sentence\n"
-        "- replacement MUST NOT be part of the original sentence\n"
-        "- regex and replacement MUST NOT be swapped\n\n"
-
-        "If a candidate violates these constraints, DO NOT select it.\n\n"
-
-        "Output ONLY the selected value.\n"
+        f"You are assigning a value to one parameter of the function `{
+            func_def.name}`.\n\n"
+        f"Function purpose: {func_def.description}\n\n"
+        "The function has the following parameters:\n"
+        f"{all_params_context}\n\n"
+        f"You must assign a value to `{param}` ({ptype}).\n"
+        f"Choose exactly one of: {opts}\n\n"
+        "Rules:\n"
+        "- Output ONLY the chosen value, nothing else.\n"
+        "- Choose ONLY from the provided options.\n"
+        "- Do not invent, combine, or modify values.\n"
+        "- Descriptive words like 'word', 'digit', 'character' are labels that "
+        "identify WHAT follows, not values themselves. The value is what comes "
+        "immediately after the label, even if it is quoted.\n"
+        "- Example: 'the word cat' → label='word', value='cat'\n"
+        "- Example: 'the digit 9' → label='digit', value='9'\n"
         "<|im_end|>\n"
-
-        f"<|im_start|>user\n"
-        f"Function: {func.name}\n"
-        f"Description: {func.description}\n\n"
-        f"Prompt:\n{prompt}\n\n"
-        f"Parameter: {param}\n"
-        f"Options: {opts_str}\n"
-        f"<|im_end|>\n"
-
-        f"<|im_start|>assistant\n"
+        f"<|im_start|>user\n{prompt}\n<|im_end|>\n"
+        f"<|im_start|>assistant\n{param} = "
     )
 
 
@@ -243,15 +245,23 @@ class Decoder:
     def decode_func_params(self, prompt, func_def):
         """
         Decode all parameters of a function using constrained decoding.
-        For each parameter:
-          - extract candidate options
-          - build an instruction
-          - use constrained decoding to choose exactly one option
+        Parameters are *processed* in descending name-length order,
+        but the final dictionary preserves the original order.
         """
         result = {}
-        used = set()   # track already chosen values
+        used = set()
 
-        for param in func_def.parameters.keys():
+        # 1. Get original order
+        original_params = list(func_def.parameters.keys())
+
+        # 2. Sort by descending length (longest name first)
+        sorted_params = sorted(original_params, key=len, reverse=True)
+
+        # 3. Temporary storage for decoded values
+        temp_values = {}
+
+        # 4. Decode in sorted order
+        for param in sorted_params:
             options = self.extract_params_options(func_def, param, prompt)
 
             # Remove already-used values
@@ -262,9 +272,12 @@ class Decoder:
             )
 
             chosen = self.constrained_decode_from_options(instruction, options)
-            result[param] = chosen
+            temp_values[param] = chosen
+            used.add(chosen)
 
-            used.add(chosen)   # mark as used
+        # 5. Reconstruct result in original order
+        for param in original_params:
+            result[param] = temp_values[param]
 
         return result
 

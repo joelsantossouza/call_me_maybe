@@ -1,29 +1,24 @@
 [
   {
-    "prompt": "Replace all numbers in \"Hello 34 I'm 233 years old\" with NUMBERS",
-    "name": "fn_substitute_string_with_regex",
+    "prompt": "Read C:\\Users\\john\\config.ini with latin-1 encoding",
+    "name": "fn_read_file",
     "parameters": {
-      "source_string": "Hello 34 I'm 233 years old",
-      "regex": "NUMBERS",
-      "replacement": "numbers"
+      "path": "Read",
+      "encoding": "latin-1"
     }
   },
   {
-    "prompt": "Replace all vowels in 'Programming is fun' with asterisks",
-    "name": "fn_substitute_string_with_regex",
+    "prompt": "Format template: Hello {user}'s profile!",
+    "name": "fn_format_template",
     "parameters": {
-      "source_string": "asterisks",
-      "regex": "Programming is fun",
-      "replacement": "vowels"
+      "template": "Hello {user}'s profile!"
     }
   },
   {
-    "prompt": "Substitute the word 'cat' with 'dog' in 'The cat sat on the mat with another cat'",
-    "name": "fn_substitute_string_with_regex",
+    "prompt": "Format template: Say \"hello\" to {name}",
+    "name": "fn_format_template",
     "parameters": {
-      "source_string": "dog",
-      "regex": "Substitute",
-      "replacement": "cat"
+      "template": "Format"
     }
   }
 ]
