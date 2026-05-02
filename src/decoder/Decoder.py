@@ -80,8 +80,8 @@ def extract_numbers(prompt: str) -> list[str]:
 
 
 def extract_ints(prompt: str) -> list[str]:
-    """Extract integer values only, excluding floats."""
-    return re.findall(r"-?\b\d+\b(?!\.\d)", prompt)
+    """Extract integer values only, excluding floats and float parts."""
+    return re.findall(r"(?<!\d\.)(?<!\.)(-?\b\d+\b)(?!\.\d)", prompt)
 
 
 def extract_strings(prompt: str) -> list[str]:

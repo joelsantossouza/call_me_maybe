@@ -1,17 +1,9 @@
 [
   {
-    "prompt": "Read the file at /home/user/data.json with utf-8 encoding",
-    "name": "fn_read_file",
-    "parameters": {
-      "path": "encoding",
-      "encoding": "utf-8"
-    }
-  },
-  {
     "prompt": "Read C:\\Users\\john\\config.ini with latin-1 encoding",
     "name": "fn_read_file",
     "parameters": {
-      "path": "encoding",
+      "path": "Read",
       "encoding": "latin-1"
     }
   },
