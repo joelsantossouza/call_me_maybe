@@ -1,9 +1,17 @@
 [
   {
+    "prompt": "Read the file at /home/user/data.json with utf-8 encoding",
+    "name": "fn_read_file",
+    "parameters": {
+      "path": "encoding",
+      "encoding": "utf-8"
+    }
+  },
+  {
     "prompt": "Read C:\\Users\\john\\config.ini with latin-1 encoding",
     "name": "fn_read_file",
     "parameters": {
-      "path": "Read",
+      "path": "encoding",
       "encoding": "latin-1"
     }
   },
@@ -11,14 +19,14 @@
     "prompt": "Format template: Hello {user}'s profile!",
     "name": "fn_format_template",
     "parameters": {
-      "template": "Hello {user}'s profile!"
+      "template": "Hello {user}'s profile"
     }
   },
   {
     "prompt": "Format template: Say \"hello\" to {name}",
     "name": "fn_format_template",
     "parameters": {
-      "template": "Format"
+      "template": "Say \"hello\" to {name}"
     }
   }
 ]

@@ -88,30 +88,26 @@ def extract_strings(prompt: str) -> list[str]:
     """
     Extract:
       - quoted substrings as single units
-      - colon-introduced substrings: text after ':' until a terminator (. ! ?)
+      - colon-introduced substrings: text after ': ' (colon followed by space)
+        until a terminator (. ! ?) or end of string
       - unquoted tokens: start with anything except a digit or whitespace,
         end at whitespace
     Without splitting quoted strings into words.
     """
     results = []
 
-    # 1. Extract quoted substrings
-    quoted = re.findall(r'"([^"]*)"|\'([^\']*)\'', prompt)
+    colon_values = re.findall(r'(?<=\S):\s+([^.!?]+?)(?:[.!?]|$)', prompt)
+    colon_values = [v.strip() for v in colon_values if v.strip()]
+    results.extend(colon_values)
+
+    cleaned = re.sub(r'(?<=\S):\s+[^.!?]+?(?:[.!?]|$)', ' ', prompt)
+
+    quoted = re.findall(r'"([^"]*)"|\'([^\']*)\'', cleaned)
     quoted = [q[0] or q[1] for q in quoted]
     results.extend(quoted)
 
-    # 2. Remove quoted substrings from the prompt
-    cleaned = re.sub(r'"[^"]*"|\'[^\']*\'', ' ', prompt)
+    cleaned = re.sub(r'"[^"]*"|\'[^\']*\'', ' ', cleaned)
 
-    # 3. Extract colon-introduced substrings until a terminator
-    colon_values = re.findall(r':\s*([^.!?]+[.!?])', cleaned)
-    colon_values = [v.strip() for v in colon_values]
-    results.extend(colon_values)
-
-    # 4. Remove colon-introduced substrings from cleaned
-    cleaned = re.sub(r':\s*[^.!?]+[.!?]', ' ', cleaned)
-
-    # 5. Extract tokens that start with a non-digit, non-whitespace character
     tokens = re.findall(r'[^\d\s][^\s]*', cleaned)
     results.extend(tokens)
 
@@ -169,22 +165,26 @@ class Decoder:
         self.llm: Small_LLM_Model = Small_LLM_Model()
         self.vocab: dict[str, int] = llm_vocab_load(self.llm)
 
-    def extract_params_options(self, func: CallMeFunction,
-                               param: str, prompt: str) -> list[str]:
+    def extract_params_options(
+        self,
+        func: CallMeFunction,
+        param: str,
+        prompt: str
+    ) -> list[str]:
         """
         Given a parameter it extract the possible values by its
-        type(number | integer | string)
+        type(number | integer | string),
         """
         ptype = func.parameters[param].type
 
         if ptype == "number":
             options = extract_numbers(prompt)
-
         elif ptype == "integer":
             options = extract_ints(prompt)
-
-        else:  # string
+        else:
             options = extract_strings(prompt)
+
+        print(options)
         return options
 
     def constrained_decode_from_options(
