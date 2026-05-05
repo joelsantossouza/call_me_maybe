@@ -144,6 +144,9 @@ class Decoder:
         func_names: set[str],
         func_defs: dict[str, CallMeFunction]
     ) -> str:
+        if not prompt.strip():
+            return "fn_none"
+
         instruction = build_instruction_for_func_name(prompt, func_defs)
         options = list(func_names)
         return self.constrained_decode_from_options(instruction, options)

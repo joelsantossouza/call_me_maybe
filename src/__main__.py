@@ -1,8 +1,20 @@
 import json
 from pathlib import Path
 from argparse import ArgumentParser, Namespace
-from .callme_files_loader import CallMeFilesLoader
+from .callme_files_loader import CallMeFilesLoader, CallMeFunction
 from .decoder import Decoder
+
+FN_NONE: dict = {
+    "name": "fn_none",
+    "description": (
+        "Fallback function used when the prompt does not match any available "
+        "function definition, or when the prompt is empty or ambiguous."
+    ),
+    "parameters": {},
+    "returns": {
+        "type": "null"
+    }
+}
 
 if __name__ == "__main__":
     # Process CLI arguments
@@ -47,12 +59,14 @@ if __name__ == "__main__":
         print(f"Error: {error_msg}")
         exit(1)
 
-    # Choose best function name
+    loader.func_definitions["fn_none"] = CallMeFunction(**FN_NONE)
+    loader.func_names.add("fn_none")
     decoder: Decoder = Decoder()
     final_output: list[dict[str, str]] = []
 
     for prompt in loader.prompts:
         print(prompt.prompt)
+        # Choose best function name
         func_name: str = decoder.decode_func_name(
             prompt.prompt, loader.func_names, loader.func_definitions
         )
