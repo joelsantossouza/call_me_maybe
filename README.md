@@ -240,7 +240,6 @@ With constrained decoding active:
 
 - **Valid output: 100%** — the trie guarantees the decoder only emits strings from the candidate list. The output is always a known function name or an extracted parameter value.
 - **Function selection: ~90–95%** — driven by the LLM's understanding of the prompt. Accuracy drops on highly ambiguous prompts where multiple functions could plausibly apply.
-- **Argument extraction: ~85–92%** — numeric values embedded clearly in the prompt are extracted reliably. String arguments depend on the regex correctly identifying the intended substring and the cleaning step not removing it.
 
 Without constrained decoding, JSON validity with Qwen3-0.6B drops to approximately 30%.
 
