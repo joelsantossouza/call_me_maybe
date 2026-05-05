@@ -5,14 +5,6 @@ from src.callme_files_loader import CallMeFunction
 from typing import Dict, List, Any
 
 
-def llm_vocab_load(llm: Small_LLM_Model) -> dict[str, int]:
-    """Get the LLM vocab json path and convert into a dictionary"""
-    vocab_path: str = llm.get_path_to_vocab_file()
-
-    with open(vocab_path, "r") as vocab:
-        return json.load(vocab)
-
-
 STOP_WORDS = {
     "all", "with", "in", "on", "at", "the", "a", "an",
     "and", "or", "of", "to", "for", "by", "is", "are", "be",

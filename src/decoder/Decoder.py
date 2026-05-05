@@ -1,7 +1,6 @@
 from llm_sdk import Small_LLM_Model
 from src.callme_files_loader import CallMeFunction
 from src.helpers import (
-    llm_vocab_load,
     build_prefix_trie,
     build_instruction_for_func_name,
     build_instruction_for_func_params,
@@ -21,7 +20,6 @@ class Decoder:
 
     def __init__(self) -> None:
         self.llm: Small_LLM_Model = Small_LLM_Model()
-        self.vocab: dict[str, int] = llm_vocab_load(self.llm)
 
     def extract_params_options(
         self,
