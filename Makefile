@@ -2,6 +2,9 @@ FUNCTIONS ?= ./data/input/functions_definition.json
 INPUT ?= ./data/input/function_calling_tests.json
 OUTPUT ?= ./data/output/function_calls.json
 
+export UV_PROJECT_ENVIRONMENT ?= $(HOME)/sgoinfre/.venv
+export UV_CACHE_DIR ?= $(HOME)/sgoinfre
+
 install:
 	pip install uv
 	uv sync

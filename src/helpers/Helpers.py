@@ -132,8 +132,8 @@ def build_instruction_for_func_params(
 
     return (
         "<|im_start|>system\n"
-        f"You are assigning a value to one parameter of the function `{
-            func_def.name}`.\n\n"
+        "You are assigning a value to one parameter of "
+        f"the function `{func_def.name}`.\n\n"
         f"Function purpose: {func_def.description}\n\n"
         "The function has the following parameters:\n"
         f"{all_params_context}\n\n"
