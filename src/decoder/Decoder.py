@@ -74,11 +74,11 @@ class Decoder:
 
         llm = self.llm
 
-        option_token_sequences = {
+        option_token_sequences: dict[str, list[int]] = {
             opt: llm.encode(opt).tolist()[0] for opt in options
         }
 
-        trie = build_prefix_trie(option_token_sequences)
+        trie: dict[str, any] = build_prefix_trie(option_token_sequences)
 
         input_ids = llm.encode(instruction).tolist()[0]
 
