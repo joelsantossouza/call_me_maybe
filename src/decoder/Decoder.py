@@ -5,6 +5,7 @@ from src.helpers import (
     build_instruction_for_func_name,
     build_instruction_for_func_params,
     is_valid_prefix,
+    to_type,
     extract_ints,
     extract_numbers,
     extract_strings,
@@ -132,7 +133,9 @@ class Decoder:
             used.add(chosen)
 
         for param in original_params:
-            result[param] = temp_values[param]
+            result[param] = to_type(
+                func_def.parameters[param].type, temp_values[param]
+            )
 
         return result
 

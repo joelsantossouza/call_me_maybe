@@ -76,19 +76,18 @@ def extract_strings(prompt: str) -> list[str]:
     """
     Extract:
       - quoted substrings as single units
-      - colon-introduced substrings: text after ': ' (colon followed by space)
-        until a terminator (. ! ?) or end of string
       - unquoted tokens: start with anything except a digit or whitespace,
         end at whitespace
     Without splitting quoted strings into words.
     """
     results = []
 
-    colon_values = re.findall(r'(?<=\S):\s+([^.!?]+?)(?:[.!?]|$)', prompt)
+    colon_pattern = r'(?<=\S):\s+([^.!?]*(?:[.!?]|$))'
+    colon_values = re.findall(colon_pattern, prompt)
     colon_values = [v.strip() for v in colon_values if v.strip()]
     results.extend(colon_values)
 
-    cleaned = re.sub(r'(?<=\S):\s+[^.!?]+?(?:[.!?]|$)', ' ', prompt)
+    cleaned = re.sub(colon_pattern, ' ', prompt)
 
     quoted = re.findall(r'"([^"]*)"|\'([^\']*)\'', cleaned)
     quoted = [q[0] or q[1] for q in quoted]
@@ -99,10 +98,7 @@ def extract_strings(prompt: str) -> list[str]:
     tokens = re.findall(r'[^\d\s][^\s]*', cleaned)
     results.extend(tokens)
 
-    filtered = [
-        s for s in results
-        if s.lower() not in STOP_WORDS
-    ]
+    filtered = [s for s in results if s.lower() not in STOP_WORDS]
     return filtered
 
 
@@ -142,3 +138,18 @@ def build_instruction_for_func_params(
         f"<|im_start|>user\n{prompt}\n<|im_end|>\n"
         f"<|im_start|>assistant\n{param} = "
     )
+
+
+def to_type(type_str: str, value: any) -> any:
+    """
+    Converts 'value' into type specified in string format
+    by 'type_str'
+    """
+    try:
+        if type_str == "number":
+            return float(value)
+        if type_str == "integer":
+            return int(value)
+        return str(value)
+    except Exception:
+        return value

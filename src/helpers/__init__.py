@@ -4,6 +4,7 @@ from .Helpers import (
     build_instruction_for_func_name,
     build_instruction_for_func_params,
     is_valid_prefix,
+    to_type,
     extract_ints,
     extract_numbers,
     extract_strings,
